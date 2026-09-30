@@ -1,0 +1,177 @@
+---
+title: "Describing the Cleaned NHANES Dataset"
+author: "Charles-Antoine Auger"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    number_sections: true
+    latex_engine: pdflatex
+bibliography: references.bib
+link-citations: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+library(pacman)
+
+pacman::p_load(
+  here,       # project-relative file paths
+  rio,        # data import
+  tidyverse,  # data manipulation
+  knitr,      # kable()
+  kableExtra, # table formatting
+  scales      # number formatting
+)
+
+nhanes <- import(here("data", "cleaned_NHANES.csv"))
+
+sbp_cols <- c("systolic_bp_1", "systolic_bp_2",
+              "systolic_bp_3", "systolic_bp_4")
+
+nhanes <- nhanes |>
+  mutate(
+    wave    = factor(wave_id),
+    sbp_avg = rowMeans(across(all_of(sbp_cols)), na.rm = TRUE),
+    sbp_avg = if_else(is.nan(sbp_avg), NA_real_, sbp_avg)
+  )
+```
+
+# Introduction
+
+The National Health and Nutrition Examination Survey (NHANES) is a continuous
+programme of the National Center for Health Statistics that combines
+interviews, physical examinations and laboratory measurements to describe the
+health and nutritional status of the civilian, non-institutionalised population
+of the United States [@nhanes]. Participants are selected through a complex
+multistage probability design, and data are released in two-year waves.
+
+This report describes the cleaned NHANES extract used throughout BIOS 640. The
+extract contains `r comma(nrow(nhanes))` participants across three waves and
+retains demographic variables, four repeated systolic and diastolic blood
+pressure readings, and a small set of socioeconomic indicators. Two tables
+summarise the dataset: the first covers sample composition, the second the
+distribution of blood pressure. All analyses were carried out in R [@rcore],
+and the tables were formatted with kableExtra [@kableextra].
+
+# Sample composition
+
+```{r table-composition}
+n_by_wave <- nhanes |>
+  count(wave, name = "n_total")
+
+size_row <- n_by_wave |>
+  mutate(level = "Participants", cell = comma(n_total)) |>
+  select(wave, level, cell)
+
+sex_row <- nhanes |>
+  group_by(wave) |>
+  summarise(n = sum(gender == "Male"), .groups = "drop") |>
+  left_join(n_by_wave, by = "wave") |>
+  mutate(level = "Male",
+         cell  = sprintf("%s (%.1f)", comma(n), 100 * n / n_total)) |>
+  select(wave, level, cell)
+
+eth_rows <- nhanes |>
+  count(wave, ethnicity_2, name = "n") |>
+  left_join(n_by_wave, by = "wave") |>
+  mutate(cell = sprintf("%s (%.1f)", comma(n), 100 * n / n_total)) |>
+  select(wave, level = ethnicity_2, cell)
+
+lev_order <- c("Participants", "Male", "White", "Black", "Mexican",
+               "Asian", "Other Hispanic", "Other")
+
+tab1 <- bind_rows(size_row, sex_row, eth_rows) |>
+  mutate(level = factor(level, levels = lev_order)) |>
+  arrange(level) |>
+  pivot_wider(names_from = wave, values_from = cell) |>
+  rename(` ` = level)
+
+kbl(tab1,
+    booktabs = TRUE,
+    align    = c("l", "c", "c", "c"),
+    caption  = "Composition of the cleaned NHANES sample by survey wave") |>
+  kable_styling(latex_options = c("hold_position"), font_size = 10) |>
+  add_header_above(c(" " = 1, "NHANES wave" = 3)) |>
+  pack_rows("Sample size", 1, 1) |>
+  pack_rows("Sex, n (%)", 2, 2) |>
+  pack_rows("Race and Hispanic origin, n (%)", 3, 8) |>
+  column_spec(1, width = "4.2cm") |>
+  row_spec(1, bold = TRUE) |>
+  footnote(
+    general = paste("Percentages are column percentages, computed within each",
+                    "wave. Sex reflects the original NHANES variable, which",
+                    "records biological sex rather than gender identity."),
+    general_title  = "Note:",
+    threeparttable = TRUE
+  )
+```
+
+The three waves are of comparable size, ranging from 9,254 to 10,175
+participants. The sex distribution is remarkably stable: males represent
+between 49.1% and 49.2% of each wave, so any difference observed across waves
+cannot be attributed to a shift in sex composition.
+
+Race and Hispanic origin vary more. The White group is the largest in every
+wave, but its share moves by more than five percentage points, from 36.1% in
+2015 to 30.7% in 2016. Other Hispanic participants show the opposite pattern,
+peaking at 13.1% in 2016 before falling back to 8.9% in 2017. These movements
+appear to reflect the oversampling strategy NHANES applies to selected
+subgroups, which changes between survey cycles, rather than a genuine change in
+the underlying population.
+
+# Blood pressure
+
+```{r table-bp}
+tab2 <- nhanes |>
+  filter(!is.na(sbp_avg)) |>
+  group_by(wave) |>
+  summarise(
+    n      = n(),
+    Min    = min(sbp_avg),
+    Median = median(sbp_avg),
+    Mean   = mean(sbp_avg),
+    SD     = sd(sbp_avg),
+    Max    = max(sbp_avg),
+    .groups = "drop"
+  ) |>
+  mutate(across(Min:Max, \(x) sprintf("%.1f", x)),
+         n = comma(n)) |>
+  rename(Wave = wave)
+
+kbl(tab2,
+    booktabs = TRUE,
+    align    = c("l", rep("c", 6)),
+    caption  = paste("Average systolic blood pressure by survey wave, among",
+                     "participants with at least one valid reading")) |>
+  kable_styling(latex_options = c("hold_position"), font_size = 10) |>
+  add_header_above(c(" " = 2,
+                     "Average systolic blood pressure (mm Hg)" = 5)) |>
+  column_spec(5, bold = TRUE) |>
+  footnote(
+    general = paste("The average systolic blood pressure is the mean of up to",
+                    "four readings taken at a single examination, and is",
+                    "missing only when all four readings are unavailable.",
+                    "Roughly one participant in four has no valid reading",
+                    "(26.0%, 26.2% and 27.5% across the three waves). The mean",
+                    "is shown in bold to highlight the upward trend."),
+    general_title  = "Note:",
+    threeparttable = TRUE
+  )
+```
+
+Average systolic blood pressure rises steadily across the three waves, from
+118.3 mm Hg in 2015 to 120.4 in 2016 and 121.7 in 2017, a total increase of
+3.4 mm Hg. The medians move in the same direction, which suggests that the
+shift affects the bulk of the distribution rather than being driven by extreme
+values alone.
+
+The spread also widens, with the standard deviation increasing from 18.1 to
+20.3 mm Hg. The maximum values sit close to 230 mm Hg in every wave, so the
+upper tail is not what changed; rather, more participants fall further from the
+centre in the later wave. Because the waves differ in their race and Hispanic
+origin composition, and because age is a strong determinant of blood pressure,
+this trend should be read as a description of these samples rather than as
+evidence of a change in the underlying population.
+
+# References

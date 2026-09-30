@@ -13,3 +13,4 @@
 *.out
 *_files/
 *_cache/
+*.tex
