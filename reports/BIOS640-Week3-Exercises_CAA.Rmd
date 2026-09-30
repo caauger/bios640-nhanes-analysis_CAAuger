@@ -3,12 +3,15 @@ title: "BIOS 640 - Week 3 Exercises"
 author: "Charles-Antoine Auger"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
-  word_document:
+  html_document:
+    theme: flatly
+    highlight: tango
     toc: true
-  pdf_document:
-    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 2
     number_sections: true
-    latex_engine: pdflatex
 ---
 
 ```{r setup, include=FALSE}
@@ -23,8 +26,6 @@ knitr::opts_chunk$set(
 options(width = 70)
 ```
 
-\newpage
-
 **Packages set up**
 ```{r packages}
 library(pacman)
@@ -36,17 +37,15 @@ pacman::p_load(
   forcats,   # reordering factor levels
   scales,    # axis label formatting
   cowplot,   # plot_grid()
-  ggpubr     # ggarrange()
+  ggpubr,    # ggarrange()
+  DT         # interactive data tables
 )
 ```
 
 ```{r data}
-# Project root, defined once and reused throughout the report
-proj <- paste0("/Users/charles-antoineauger/Desktop/McGill 2026-2027/",
-               "BIOS-640/Week 3/BIOS640-Week3-Exercises_CAA")
-
-# Cleaned dataset provided with the assignment
-nhanes <- import(file.path(proj, "data", "cleaned_NHANES.csv"))
+# Cleaned dataset provided with the assignment.
+# here() resolves paths from the project root, so no absolute path is needed.
+nhanes <- import(here("data", "cleaned_NHANES.csv"))
 
 nhanes <- nhanes |>
   select(-1) |>
@@ -80,7 +79,9 @@ older, leaving 16,787 participants.
 
 # Exercise 1 - Reproducing and arranging ggplot2 figures
 
-## Recreating the two figures
+## Figures {.tabset}
+
+### Individual figures
 
 ```{r ex1-fig1, fig.width=7, fig.height=4}
 fig_age_gender <- ggplot(nhanes, aes(x = age_years, fill = gender)) +
@@ -112,6 +113,26 @@ fig_eth_gender <- ggplot(nhanes, aes(x = race_eth_3, fill = gender)) +
 
 fig_eth_gender
 ```
+
+### Combined figures
+
+**With cowplot**
+
+```{r ex1-cowplot, fig.width=7.5, fig.height=8}
+plot_grid(fig_age_gender, fig_eth_gender,
+          ncol = 1, labels = c("A", "B"))
+```
+
+**With ggpubr**
+
+```{r ex1-ggpubr, fig.width=7.5, fig.height=8}
+ggarrange(fig_age_gender, fig_eth_gender,
+          ncol = 1, labels = c("A", "B"),
+          common.legend = TRUE, legend = "right")
+```
+
+## Comparing the two layout functions
+
 **How the two functions differ**
 plot_grid() and ggarrange() stack the two panels in the same way and align them 
 identically, but they differ in how they handle the legend. plot_grid() keeps 
@@ -129,24 +150,18 @@ rather than next to either one. plot_grid() would be the better choice if the
 two panels had different legends, since it makes no assumption that they can 
 be merged.
 
-## Combining with cowplot
-
-```{r ex1-cowplot, fig.width=7.5, fig.height=8}
-plot_grid(fig_age_gender, fig_eth_gender,
-          ncol = 1, labels = c("A", "B"))
-```
-
-## Combining with ggpubr
-
-```{r ex1-ggpubr, fig.width=7.5, fig.height=8}
-ggarrange(fig_age_gender, fig_eth_gender,
-          ncol = 1, labels = c("A", "B"),
-          common.legend = TRUE, legend = "right")
-```
-
-\newpage
-
 # Exercise 2 - Visualizing key characteristics
+
+```{r ex2-datatable}
+datatable(
+  nhanes,
+  rownames = FALSE,
+  filter   = "top",
+  caption  = "Cleaned NHANES sample, adults aged 21 years and over.",
+  options  = list(pageLength = 10, scrollX = TRUE)
+)
+```
+
 
 ## Age
 
@@ -243,7 +258,7 @@ to keep, since it separates a group that race_eth_1 hides inside a residual
 category while losing no information.
 
 ```{r ex2-save}
-fig_dir <- file.path(proj, "figures")
+fig_dir <- here("figures")
 dir.create(fig_dir, showWarnings = FALSE)
 
 ggsave(file.path(fig_dir, "ex2_age.png"), p_age,
@@ -262,8 +277,6 @@ nhanes <- nhanes |>
 
 ncol(nhanes)
 ```
-
-\newpage
 
 # Exercise 3 - Improving a ggplot figure 
 
@@ -292,7 +305,7 @@ and a light theme.
 ## Improved figure
 
 ```{r ex3-data}
-diet <- import(file.path(proj, "data", "diet.csv"))
+diet <- import(here("data", "diet.csv"))
 
 diet <- diet |>
   rename(week = Week, participant = Participant, weight = Weight) |>
@@ -345,8 +358,6 @@ Plotted this way, the sample separates into three groups that the original
 figure did not reveal: ten participants end 15.9 to 23.1 kg below baseline, 
 five remain at their starting weight, and five gain 3.9 to 5.1 kg. The diet did 
 not produce a uniform effect, which the original figure could not show.
-
-\newpage
 
 # Exercise 4 - Exploring relationships through visualizations
 
