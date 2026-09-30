@@ -3,7 +3,7 @@
 Coursework repository for BIOS 640 (Introduction to Health Data Science
 Methods), McGill University. The project explores demographic and blood
 pressure data from the National Health and Nutrition Examination Survey
-(NHANES), using R Markdown for reproducible reporting.
+(NHANES).
 
 ## Repository structure
 
