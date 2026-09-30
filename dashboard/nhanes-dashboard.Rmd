@@ -1,0 +1,72 @@
+---
+title: "NHANES Dashboard"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(pacman)
+
+pacman::p_load(
+  here,           # project-relative file paths
+  rio,            # data import
+  tidyverse,      # data manipulation
+  knitr,          # include_graphics()
+  flexdashboard   # dashboard layout, gauge() and valueBox()
+)
+
+# Full cleaned dataset, all ages. The gauge below reports the share of
+# participants aged 21 and over, so the sample must not be pre-filtered.
+nhanes <- import(here("data", "cleaned_NHANES.csv"))
+
+# Average of the four systolic readings.
+# NA only when all four readings are missing.
+sbp_cols <- c("systolic_bp_1", "systolic_bp_2",
+              "systolic_bp_3", "systolic_bp_4")
+
+nhanes <- nhanes |>
+  mutate(sbp_avg = rowMeans(across(all_of(sbp_cols)), na.rm = TRUE))
+```
+
+Row {data-height=650}
+-----------------------------------------------------------------------
+
+### Age distribution of the NHANES sample
+
+```{r, out.width="100%", fig.align="center"}
+include_graphics(here("figures", "ex2_age.png"))
+```
+
+Row {data-height=350}
+-----------------------------------------------------------------------
+
+### Participants aged 21 years and over
+
+```{r}
+pct_21 <- round(100 * mean(nhanes$age >= 21, na.rm = TRUE), 1)
+
+gauge(
+  pct_21,
+  min = 0, max = 100, symbol = "%",
+  gaugeSectors(
+    success = c(67, 100),
+    warning = c(34, 66),
+    danger  = c(0, 33)
+  )
+)
+```
+
+### Average systolic blood pressure above 120 mm Hg
+
+```{r}
+pct_high <- round(100 * mean(nhanes$sbp_avg > 120, na.rm = TRUE), 1)
+
+valueBox(
+  paste0(pct_high, "%"),
+  caption = "of participants with a blood pressure measurement",
+  icon    = "fa-heartbeat",
+  color   = "#B3322C"
+)
+```
